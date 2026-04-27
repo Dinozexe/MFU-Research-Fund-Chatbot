@@ -126,7 +126,27 @@ def get_answer(message, retriever, pipe, tokenizer):
 
 
 st.set_page_config(page_title="MFU Research Grant Bot", page_icon="🎓", layout="centered")
-st.title("🎓 MFU Research Grant Bot")
+st.title("🎓 BDA_Project2_Group3")
+
+st.markdown("""
+### 📌 📌 Project: MFU Research Fund Chatbot
+
+ระบบถาม-ตอบระเบียบทุนวิจัย โดยใช้ Retrieval-Augmented Generation (RAG)
+
+---
+
+### 👥 Group Members (Group 3)
+
+- 6631501003 – Korravee Yimyuan  
+- 6631501004 – Kittamet Winyayong  
+- 6631501008 – Kitticheat Suttipipat  
+- 6631501009 – Kittinan Pinchaisiri  
+- 6631501011 – Kittiphat Jantho  
+- 6631501024 – Chirat Sirisrichattra  
+
+---
+""")
+
 st.caption("ถามตอบระเบียบทุนวิจัยเพื่อพัฒนาการเรียนรู้ มหาวิทยาลัยแม่ฟ้าหลวง")
 
 retriever = load_retriever()
