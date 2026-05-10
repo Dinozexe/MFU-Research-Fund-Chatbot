@@ -10,7 +10,7 @@ rank_bm25==0.2.2
 pypdf==5.4.0
 docx2txt==0.8
 
-# LLM via HuggingFace Inference API (ไม่ต้องโหลดโมเดลลงเครื่อง)
+# LLM via HuggingFace Inference API 
 huggingface_hub==0.28.1
 
 # Streamlit
