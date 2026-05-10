@@ -9,8 +9,9 @@ langchain-community==0.2.4
 langchain-text-splitters==0.2.1
 langchain-huggingface==0.0.3
 
-faiss-cpu==1.7.4
 sentence-transformers==2.7.0
+faiss-cpu==1.7.4
+rank-bm25==0.2.2
 
 pypdf==4.2.0
 docx2txt==0.8
