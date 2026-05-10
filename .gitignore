@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+venv/
+.venv/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Model cache (ไม่ต้อง push ขึ้น git)
+*.bin
+*.safetensors
+models/
+.cache/
+
+# OS
+.DS_Store
+Thumbs.db
