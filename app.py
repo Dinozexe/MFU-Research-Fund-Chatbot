@@ -28,8 +28,24 @@ DATASET_DIR = os.path.join(BASE_DIR, "dataset")
 MODEL_ID = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
 MAX_CONTEXT_LENGTH = 3000
 
+FEW_SHOT_EXAMPLES = """
+ตัวอย่างการตอบคำถามที่ถูกต้อง:
+
+Q: อาจารย์จะตั้งงบวิจัยอย่างไร
+A: อาจารย์สามารถตั้งงบวิจัยได้ตามค่าใช้จ่ายที่คาดว่าจะเกิดขึ้นจริงในโครงการ โดยอ้างอิงรายการค่าใช้จ่ายตามระเบียบของมหาวิทยาลัย
+
+Q: ผู้วิจัยจะได้รับเงินเมื่อไหร่
+A: การเบิกจ่ายเงินทุนวิจัยฯ จะแบ่งจ่ายเป็น 3 งวด ได้แก่
+งวดที่ 1 50%
+งวดที่ 2 30%
+งวดที่ 3 20%
+
+Q: ผู้วิจัยสามารถเบิกค่าตอบแทนได้หรือไม่
+A: สามารถเบิกได้ไม่เกิน 3,000 บาท ต่อโครงการ
+"""
+
 # =========================
-# PAGE CONFIG
+# UI (คงของเดิม)
 # =========================
 
 st.set_page_config(
@@ -38,9 +54,28 @@ st.set_page_config(
     layout="centered"
 )
 
-st.title("🎓 MFU Research Fund Chatbot")
+st.title("🎓 BDA_Project2_Group3")
 
-st.caption("ถามตอบระเบียบทุนวิจัย มหาวิทยาลัยแม่ฟ้าหลวง")
+st.markdown("""
+### 📌 Project: MFU Research Fund Chatbot
+
+ระบบถาม-ตอบระเบียบทุนวิจัย โดยใช้ Retrieval-Augmented Generation (RAG)
+
+---
+
+### 👥 Group Members (Group 3)
+
+- 6631501003 – Korravee Yimyuan
+- 6631501004 – Kittamet Winyayong
+- 6631501008 – Kitticheat Suttipipat
+- 6631501009 – Kittinan Pinchaisiri
+- 6631501011 – Kittiphat Jantho
+- 6631501024 – Chirat Sirisrichattra
+
+---
+""")
+
+st.caption("ถามตอบระเบียบทุนวิจัยเพื่อพัฒนาการเรียนรู้ มหาวิทยาลัยแม่ฟ้าหลวง")
 
 # =========================
 # LOAD RETRIEVER
@@ -54,17 +89,14 @@ def load_retriever():
     if not os.path.exists(DATASET_DIR):
         os.makedirs(DATASET_DIR)
 
-    # โหลด PDF
-    pdf_loader = PyPDFDirectoryLoader(DATASET_DIR)
-    docs += pdf_loader.load()
+    docs += PyPDFDirectoryLoader(DATASET_DIR).load()
 
-    # โหลด DOCX
     for file in os.listdir(DATASET_DIR):
         if file.endswith(".docx"):
             docs += Docx2txtLoader(os.path.join(DATASET_DIR, file)).load()
 
     if len(docs) == 0:
-        st.error("❌ ไม่พบไฟล์ใน dataset/")
+        st.error("❌ ไม่พบไฟล์ PDF หรือ DOCX ใน dataset/")
         st.stop()
 
     splitter = RecursiveCharacterTextSplitter(
@@ -80,10 +112,7 @@ def load_retriever():
         model_kwargs={"device": "cpu"}
     )
 
-    vectorstore = FAISS.from_documents(
-        documents=splits,
-        embedding=embeddings
-    )
+    vectorstore = FAISS.from_documents(splits, embeddings)
 
     faiss_retriever = vectorstore.as_retriever(search_kwargs={"k": 6})
 
@@ -96,8 +125,8 @@ def load_retriever():
             retrievers=[bm25, faiss_retriever],
             weights=[0.5, 0.5]
         )
-    except:
-        st.warning("⚠️ BM25 ใช้งานไม่ได้ ใช้ FAISS อย่างเดียว")
+    except Exception as e:
+        st.warning("⚠️ BM25 ใช้ไม่ได้ → ใช้ FAISS อย่างเดียว")
         retriever = faiss_retriever
 
     return retriever
@@ -122,8 +151,8 @@ def load_model():
             model=model,
             tokenizer=tokenizer,
             max_new_tokens=200,
-            do_sample=True,
             temperature=0.7,
+            do_sample=True,
             repetition_penalty=1.1,
             return_full_text=False
         )
@@ -140,7 +169,7 @@ def load_model():
 
 def get_answer(question, retriever, pipe, tokenizer):
 
-    expanded_query = f"{question} ทุนวิจัย เบิกจ่าย งวด"
+    expanded_query = f"{question} ทุนวิจัย เบิกจ่าย งวด ค่าตอบแทน"
 
     docs = retriever.invoke(expanded_query)
 
@@ -151,9 +180,12 @@ def get_answer(question, retriever, pipe, tokenizer):
 คุณคือ AI ตอบคำถามระเบียบทุนวิจัย
 
 กฎ:
-- ตอบจาก context เท่านั้น
-- ถ้าไม่มีข้อมูล ให้ตอบว่า "ไม่พบข้อมูลในระเบียบ"
-- ตอบสั้น กระชับ ภาษาไทย
+1. ตอบเฉพาะข้อมูลใน Context
+2. ถ้าไม่มี → "ไม่พบข้อมูลในระเบียบ"
+3. ตอบสั้น กระชับ ภาษาไทย
+4. ห้ามแต่งข้อมูล
+
+{FEW_SHOT_EXAMPLES}
 
 Context:
 {context}
@@ -179,6 +211,12 @@ Context:
 
     answer = result[0]["generated_text"].strip()
 
+    # clean output
+    stop_tokens = ["Q:", "User:", "Assistant:"]
+    for t in stop_tokens:
+        if t in answer:
+            answer = answer.split(t)[0]
+
     if not answer:
         answer = "ไม่พบข้อมูลในระเบียบ"
 
@@ -202,7 +240,7 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-if prompt := st.chat_input("พิมพ์คำถาม..."):
+if prompt := st.chat_input("พิมพ์คำถามของคุณที่นี่..."):
 
     st.session_state.messages.append({
         "role": "user",
@@ -213,7 +251,7 @@ if prompt := st.chat_input("พิมพ์คำถาม..."):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("🔍 กำลังค้นหา..."):
+        with st.spinner("🔍 กำลังค้นหาคำตอบ..."):
             answer = get_answer(prompt, retriever, pipe, tokenizer)
 
         st.markdown(answer)
