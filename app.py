@@ -25,7 +25,7 @@ from transformers import (
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATASET_DIR = os.path.join(BASE_DIR, "dataset")
 
-MODEL_ID = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+MODEL_ID = "openthaigpt/openthaigpt-1.0.0-7b-chat"
 MAX_CONTEXT_LENGTH = 3000
 
 FEW_SHOT_EXAMPLES = """
@@ -139,11 +139,11 @@ def load_retriever():
 def load_model():
     try:
         tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
-
         model = AutoModelForCausalLM.from_pretrained(
             MODEL_ID,
-            torch_dtype=torch.float32,
-            device_map="cpu"
+            torch_dtype=torch.float16,  
+            load_in_8bit=True,          
+            device_map="auto"            
         )
 
         pipe = pipeline(
