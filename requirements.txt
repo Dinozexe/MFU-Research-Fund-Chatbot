@@ -1,18 +1,16 @@
-streamlit
-gradio
+streamlit==1.35.0
 
-torch
-transformers
-accelerate
-bitsandbytes
-sentence-transformers
+torch==2.2.2
+transformers==4.41.2
+accelerate==0.30.1
 
-langchain
-langchain-community<0.3.28
-langchain-huggingface
+langchain==0.2.3
+langchain-community==0.2.4
+langchain-text-splitters==0.2.1
+langchain-huggingface==0.0.3
 
-faiss-cpu
-rank_bm25
+faiss-cpu==1.7.4
+sentence-transformers==2.7.0
 
-pypdf
-docx2txt
+pypdf==4.2.0
+docx2txt==0.8
