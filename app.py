@@ -26,7 +26,7 @@ from transformers import (
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATASET_DIR = os.path.join(BASE_DIR, "dataset")
 
-MODEL_ID = "google/gemma-2-2b-it"
+MODEL_ID = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
 
 FEW_SHOT_EXAMPLES = """
 ตัวอย่างการตอบคำถามที่ถูกต้อง:
@@ -149,28 +149,33 @@ def load_retriever():
 # LOAD MODEL
 # =========================
 
-@st.cache_resource(show_spinner="🤖 กำลังโหลดโมเดล AI (ขนาดเล็ก)...")
+@st.cache_resource(show_spinner="🤖 กำลังโหลดโมเดล AI...")
 def load_model():
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
-    
-    model = AutoModelForCausalLM.from_pretrained(
-        MODEL_ID,
-        torch_dtype=torch.float32, 
-        device_map="cpu"
-    )
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True)
+        model = AutoModelForCausalLM.from_pretrained(
+            MODEL_ID,
+            torch_dtype=torch.float32,
+            device_map="cpu",
+            trust_remote_code=True
+        )
 
-    pipe = pipeline(
-        "text-generation",
-        model=model,
-        tokenizer=tokenizer,
-        max_new_tokens=250, 
-        do_sample=True,
-        temperature=0.7,
-        repetition_penalty=1.1,
-        return_full_text=False
-    )
+        pipe = pipeline(
+            "text-generation",
+            model=model,
+            tokenizer=tokenizer,
+            max_new_tokens=200,
+            do_sample=True,
+            temperature=0.7,
+            repetition_penalty=1.1,
+            return_full_text=False
+        )
 
-    return pipe, tokenizer
+        return pipe, tokenizer
+
+    except Exception as e:
+        st.error(f"❌ โหลดโมเดลไม่สำเร็จ: {e}")
+        st.stop()
 
 # =========================
 # GENERATE ANSWER
