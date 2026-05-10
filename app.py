@@ -1,5 +1,4 @@
 import os
-import torch
 import streamlit as st
 
 from langchain_community.document_loaders import (
@@ -12,12 +11,6 @@ from langchain_community.vectorstores import FAISS
 from langchain_community.retrievers import BM25Retriever
 from langchain.retrievers import EnsembleRetriever
 
-from transformers import (
-    pipeline,
-    AutoModelForCausalLM,
-    AutoTokenizer
-)
-
 # =========================
 # CONFIG
 # =========================
@@ -25,27 +18,10 @@ from transformers import (
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATASET_DIR = os.path.join(BASE_DIR, "dataset")
 
-MODEL_ID = "openthaigpt/openthaigpt-1.0.0-7b-chat"
-MAX_CONTEXT_LENGTH = 3000
-
-FEW_SHOT_EXAMPLES = """
-ตัวอย่างการตอบคำถามที่ถูกต้อง:
-
-Q: อาจารย์จะตั้งงบวิจัยอย่างไร
-A: อาจารย์สามารถตั้งงบวิจัยได้ตามค่าใช้จ่ายที่คาดว่าจะเกิดขึ้นจริงในโครงการ โดยอ้างอิงรายการค่าใช้จ่ายตามระเบียบของมหาวิทยาลัย
-
-Q: ผู้วิจัยจะได้รับเงินเมื่อไหร่
-A: การเบิกจ่ายเงินทุนวิจัยฯ จะแบ่งจ่ายเป็น 3 งวด ได้แก่
-งวดที่ 1 50%
-งวดที่ 2 30%
-งวดที่ 3 20%
-
-Q: ผู้วิจัยสามารถเบิกค่าตอบแทนได้หรือไม่
-A: สามารถเบิกได้ไม่เกิน 3,000 บาท ต่อโครงการ
-"""
+EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 # =========================
-# UI (คงของเดิม)
+# UI
 # =========================
 
 st.set_page_config(
@@ -103,20 +79,16 @@ def load_retriever():
         chunk_size=500,
         chunk_overlap=150
     )
-
     splits = splitter.split_documents(docs)
 
-    # 🔥 embedding เบา
     embeddings = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2",
+        model_name=EMBEDDING_MODEL,
         model_kwargs={"device": "cpu"}
     )
 
     vectorstore = FAISS.from_documents(splits, embeddings)
-
     faiss_retriever = vectorstore.as_retriever(search_kwargs={"k": 6})
 
-    # 🔥 BM25 fallback
     try:
         bm25 = BM25Retriever.from_documents(splits)
         bm25.k = 6
@@ -125,109 +97,50 @@ def load_retriever():
             retrievers=[bm25, faiss_retriever],
             weights=[0.5, 0.5]
         )
-    except Exception as e:
+    except Exception:
         st.warning("⚠️ BM25 ใช้ไม่ได้ → ใช้ FAISS อย่างเดียว")
         retriever = faiss_retriever
 
     return retriever
 
 # =========================
-# LOAD MODEL
+# GET ANSWER (Retrieval-only)
 # =========================
 
-@st.cache_resource(show_spinner="🤖 กำลังโหลดโมเดล...")
-def load_model():
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
-        model = AutoModelForCausalLM.from_pretrained(
-            MODEL_ID,
-            torch_dtype=torch.float16,  
-            load_in_8bit=True,          
-            device_map="auto"            
-        )
-
-        pipe = pipeline(
-            "text-generation",
-            model=model,
-            tokenizer=tokenizer,
-            max_new_tokens=200,
-            temperature=0.7,
-            do_sample=True,
-            repetition_penalty=1.1,
-            return_full_text=False
-        )
-
-        return pipe, tokenizer
-
-    except Exception as e:
-        st.error(f"❌ โหลดโมเดลไม่สำเร็จ: {e}")
-        st.stop()
-
-# =========================
-# GENERATE ANSWER
-# =========================
-
-def get_answer(question, retriever, pipe, tokenizer):
+def get_answer(question, retriever):
 
     expanded_query = f"{question} ทุนวิจัย เบิกจ่าย งวด ค่าตอบแทน"
-
     docs = retriever.invoke(expanded_query)
 
-    context = "\n\n".join([d.page_content for d in docs])
-    context = context[:MAX_CONTEXT_LENGTH]
+    if not docs:
+        return "ไม่พบข้อมูลในระเบียบ"
 
-    system_prompt = f"""
-คุณคือ AI ตอบคำถามระเบียบทุนวิจัย
+    results = []
+    for i, doc in enumerate(docs[:3]):
+        content = doc.page_content.strip()
+        source = doc.metadata.get("source", "")
+        page = doc.metadata.get("page", "")
 
-กฎ:
-1. ตอบเฉพาะข้อมูลใน Context
-2. ถ้าไม่มี → "ไม่พบข้อมูลในระเบียบ"
-3. ตอบสั้น กระชับ ภาษาไทย
-4. ห้ามแต่งข้อมูล
+        # แสดง source ถ้ามี
+        meta = ""
+        if source:
+            filename = os.path.basename(source)
+            meta = f"📄 **{filename}**"
+            if page != "":
+                meta += f" หน้า {int(page) + 1}"
 
-{FEW_SHOT_EXAMPLES}
+        if meta:
+            results.append(f"{meta}\n\n{content}")
+        else:
+            results.append(f"📄 **ข้อมูลที่ {i+1}**\n\n{content}")
 
-Context:
-{context}
-"""
-
-    # 🔥 safe chat template
-    try:
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": question}
-        ]
-
-        prompt = tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True
-        )
-
-    except:
-        prompt = f"{system_prompt}\n\nQuestion: {question}\nAnswer:"
-
-    result = pipe(prompt)
-
-    answer = result[0]["generated_text"].strip()
-
-    # clean output
-    stop_tokens = ["Q:", "User:", "Assistant:"]
-    for t in stop_tokens:
-        if t in answer:
-            answer = answer.split(t)[0]
-
-    if not answer:
-        answer = "ไม่พบข้อมูลในระเบียบ"
-
-    return answer
+    return "\n\n---\n\n".join(results)
 
 # =========================
 # INIT
 # =========================
 
 retriever = load_retriever()
-pipe, tokenizer = load_model()
 
 # =========================
 # CHAT UI
@@ -252,7 +165,7 @@ if prompt := st.chat_input("พิมพ์คำถามของคุณท�
 
     with st.chat_message("assistant"):
         with st.spinner("🔍 กำลังค้นหาคำตอบ..."):
-            answer = get_answer(prompt, retriever, pipe, tokenizer)
+            answer = get_answer(prompt, retriever)
 
         st.markdown(answer)
 
