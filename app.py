@@ -26,7 +26,7 @@ from transformers import (
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATASET_DIR = os.path.join(BASE_DIR, "dataset")
 
-MODEL_ID = "scb10x/llama-3-typhoon-v1.5x-8b-instruct"
+MODEL_ID = "google/gemma-2-2b-it"
 
 FEW_SHOT_EXAMPLES = """
 ตัวอย่างการตอบคำถามที่ถูกต้อง:
@@ -149,32 +149,23 @@ def load_retriever():
 # LOAD MODEL
 # =========================
 
-@st.cache_resource(show_spinner="🤖 กำลังโหลดโมเดล AI...")
+@st.cache_resource(show_spinner="🤖 กำลังโหลดโมเดล AI (ขนาดเล็ก)...")
 def load_model():
-
-    torch.cuda.empty_cache()
-
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.float16
-    )
-
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
-
+    
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_ID,
-        quantization_config=bnb_config,
-        device_map="auto"
+        torch_dtype=torch.float32, 
+        device_map="cpu"
     )
 
     pipe = pipeline(
         "text-generation",
         model=model,
         tokenizer=tokenizer,
-        max_new_tokens=300,
-        do_sample=False,
+        max_new_tokens=250, 
+        do_sample=True,
+        temperature=0.7,
         repetition_penalty=1.1,
         return_full_text=False
     )
