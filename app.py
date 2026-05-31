@@ -8,10 +8,8 @@ from langchain_community.retrievers import BM25Retriever
 from langchain.retrievers import EnsembleRetriever
 from huggingface_hub import InferenceClient
 
-# ─── CONFIG ────────────────────────────────────────────────────────────────────
-# ใส่ HF_TOKEN ใน Streamlit Secrets (Settings → Secrets) ชื่อ key ว่า HF_TOKEN
 HF_TOKEN = os.environ.get("HF_TOKEN", st.secrets.get("HF_TOKEN", ""))
-MODEL_ID  = "scb10x/llama-3-typhoon-v1.5x-8b-instruct"   # เปลี่ยนได้ถ้า HF Inference ไม่รองรับ
+MODEL_ID  = "scb10x/llama-3-typhoon-v1.5x-8b-instruct"   
 DATASET_DIR = "dataset"
 
 FEW_SHOT_EXAMPLES = """
@@ -32,7 +30,6 @@ A: สามารถเบิกจ่ายค่าตอบแทนผู�
 สังเกต: ค่าตอบแทน (allowance) และ การซื้อครุภัณฑ์ (hardware) เป็นคนละข้อกันในระเบียบ อย่าสับสนระหว่างกัน
 """
 
-# ─── LOAD & BUILD RETRIEVER (cached — runs once per session) ───────────────────
 @st.cache_resource(show_spinner="📚 กำลังโหลดเอกสารและสร้าง Retriever...")
 def load_retriever():
     if not os.path.exists(DATASET_DIR):
@@ -41,11 +38,9 @@ def load_retriever():
 
     docs = []
 
-    # PDF
     pdf_loader = PyPDFDirectoryLoader(DATASET_DIR)
     docs += pdf_loader.load()
 
-    # DOCX
     for fname in os.listdir(DATASET_DIR):
         if fname.endswith(".docx"):
             docs += Docx2txtLoader(os.path.join(DATASET_DIR, fname)).load()
@@ -76,7 +71,6 @@ def load_retriever():
         weights=[0.5, 0.5]
     )
 
-# ─── LLM via HuggingFace Inference API ────────────────────────────────────────
 @st.cache_resource(show_spinner="🤖 กำลังเชื่อมต่อโมเดล...")
 def get_client():
     if not HF_TOKEN:
@@ -111,7 +105,6 @@ def ask_llm(client: InferenceClient, message: str, context: str) -> str:
         )
         answer = response.choices[0].message.content.strip()
     except Exception as e:
-        # ถ้าโมเดล Typhoon ไม่มีใน HF Inference API ให้เปลี่ยนเป็น fallback
         answer = f"เกิดข้อผิดพลาดในการเรียกโมเดล: {e}"
 
     # ตัด stop tokens ที่อาจติดมา
@@ -122,7 +115,6 @@ def ask_llm(client: InferenceClient, message: str, context: str) -> str:
     return answer if answer else "ไม่พบข้อมูลในระเบียบ"
 
 
-# ─── STREAMLIT UI ──────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="MFU Research Fund Chatbot",
     page_icon="🎓",
@@ -144,27 +136,21 @@ with st.expander("👥 Group Members (BDA Project 2 — Group 3)", expanded=Fals
     | 6631501024 | Chirat Sirisrichattra |
     """)
 
-# โหลด retriever และ client ครั้งเดียว
 retriever = load_retriever()
 client    = get_client()
 
-# Chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# แสดงประวัติการสนทนา
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# รับ input
 if prompt := st.chat_input("ถามเกี่ยวกับระเบียบทุนวิจัย MFU..."):
-    # แสดงข้อความผู้ใช้
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Retrieve + Generate
     with st.chat_message("assistant"):
         with st.spinner("กำลังค้นหาข้อมูล..."):
             expanded_query = (
